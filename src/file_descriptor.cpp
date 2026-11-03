@@ -20,11 +20,20 @@ namespace proxy {
 
     FileDescriptor& FileDescriptor::operator=(FileDescriptor&& other) noexcept {
         if (this != &other){
-            if(fd_ == -1) {
-                close(fd_);
-            }
+            reset();
             fd_ = std::exchange(other.fd_, -1);
         }
         return *this;
+    }
+
+    void FileDescriptor::reset() noexcept {
+        // -1 means it was never init or moved, no need to waste a sys call
+        if(fd_ != -1) {
+            close(fd_);
+        }
+    }
+
+    FileDescriptor::~FileDescriptor(){
+       reset();
     }
 }

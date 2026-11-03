@@ -7,8 +7,6 @@ class FileDescriptor {
     public:
         FileDescriptor() = default;
         explicit FileDescriptor(int fd) noexcept;
-        ~FileDescriptor();
-
         FileDescriptor(const FileDescriptor&) = delete;
         FileDescriptor& operator=(const FileDescriptor&) = delete;
 
@@ -17,9 +15,11 @@ class FileDescriptor {
 
         [[nodiscard]] int get() const noexcept;
         [[nodiscard]] bool valid() const noexcept;
+        void reset() noexcept;
+        ~FileDescriptor();
 
-        private:
-            int fd_ = -1;
+    private:
+        int fd_ = -1;
     };
 
 }
