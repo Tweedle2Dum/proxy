@@ -16,7 +16,10 @@ endif()
 add_compile_options(-Wall -Wextra -Wpedantic -Werror)
 
 
-add_library(proxy_core src/file_descriptor.cpp)
+add_library(proxy_core src/file_descriptor.cpp
+                       src/socket.cpp
+)
+
 target_include_directories(proxy_core PUBLIC include)
 
 add_executable(echo_server src/echo_server.cpp)
