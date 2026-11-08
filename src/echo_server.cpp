@@ -5,13 +5,9 @@
 #include <unistd.h>
 
 #include <array>
-#include <cerrno>
 #include <cstddef>
-#include <cstdio>
-#include <cstring>
 #include <print>
 
-#include "proxy/file_descriptor.hpp"
 #include "proxy/socket.hpp"
 
 int main() {

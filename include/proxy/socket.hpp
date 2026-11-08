@@ -14,6 +14,8 @@ class Socket {
    public:
     [[nodiscard]] static std::expected<Socket, std::error_code> listen(std::string_view host,
                                                                        std::uint16_t port);
+    [[nodiscard]] static std::expected<Socket, std::error_code> connect(std::string_view host,
+                                                                        std::uint16_t port);
 
     [[nodiscard]] std::expected<Socket, std::error_code> accept() const;
     [[nodiscard]] std::expected<std::size_t, std::error_code> send(

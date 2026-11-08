@@ -31,11 +31,14 @@ const std::error_category& gai_category() {
     return instance;
 }
 
-std::expected<AddrInfoList, std::error_code> resolve(std::string_view host, std::uint16_t port) {
+enum class ResolveFor { Listen, Connect };
+
+std::expected<AddrInfoList, std::error_code> resolve(std::string_view host, std::uint16_t port,
+                                                     ResolveFor purpose) {
     addrinfo hints{};
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE;
+    hints.ai_flags = (purpose == ResolveFor::Listen) ? AI_PASSIVE : 0;
 
     std::string host_str{host};
     std::string port_str = std::to_string(port);
@@ -92,7 +95,7 @@ std::expected<std::size_t, std::error_code> Socket::send(std::span<const std::by
 }
 
 std::expected<Socket, std::error_code> Socket::listen(std::string_view host, std::uint16_t port) {
-    auto addresses = resolve(host, port);
+    auto addresses = resolve(host, port, ResolveFor::Listen);
     if (!addresses) {
         return std::unexpected(addresses.error());
     }
@@ -123,6 +126,29 @@ std::expected<Socket, std::error_code> Socket::listen(std::string_view host, std
         return Socket{std::move(fd)};
     }
 
+    return std::unexpected(last_error);
+}
+
+std::expected<Socket, std::error_code> Socket::connect(std::string_view host,
+                                                       std::uint16_t port) {
+    auto addresses = resolve(host, port, ResolveFor::Connect);
+    if (!addresses) {
+        return std::unexpected(addresses.error());
+    }
+    std::error_code last_error = std::make_error_code(std::errc::host_unreachable);
+
+    for (addrinfo* ai = addresses->get(); ai != nullptr; ai = ai->ai_next) {
+        FileDescriptor fd{::socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol)};
+        if (!fd.valid()) {
+            last_error = std::error_code{errno, std::system_category()};
+            continue;
+        }
+        if (::connect(fd.get(), ai->ai_addr, ai->ai_addrlen) == -1) {
+            last_error = std::error_code{errno, std::system_category()};
+            continue;
+        }
+        return Socket{std::move(fd)};
+    }
     return std::unexpected(last_error);
 }
 
