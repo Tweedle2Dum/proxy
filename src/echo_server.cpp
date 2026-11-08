@@ -15,7 +15,7 @@
 
 int main() {
 
-    auto listener = proxy::Socket::listen("0.0.0.0", 9000);
+    auto listener = proxy::Socket::listen("localhost", 9000);
     if (!listener.has_value()) {
         std::println(stderr, "socket: {}", listener.error().message());
         return 1;

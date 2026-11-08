@@ -2,16 +2,59 @@
 #include "proxy/file_descriptor.hpp"
 #include <arpa/inet.h>
 #include <cstddef>
+#include <memory>
 #include <span>
 #include <sys/socket.h>
 #include <cerrno>
 #include <expected>
 #include <netinet/in.h>
-#include <print>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <system_error>
+#include <netdb.h>
+
 namespace proxy {
+
+    namespace{
+        using AddrInfoList = std::unique_ptr<addrinfo, decltype(&freeaddrinfo)>;
+
+        class GaiCategory : public std::error_category {
+            public:
+                const char* name() const noexcept override { return "getaddrinfo";}
+                std::string message(int code) const override { return gai_strerror(code);}
+        };
+
+        const std::error_category& gai_category(){
+            static GaiCategory instance;
+            return instance;
+        }
+
+        std::expected<AddrInfoList, std::error_code> resolve(std::string_view host, std::uint16_t port){
+            addrinfo hints{};
+            hints.ai_family = AF_UNSPEC;
+            hints.ai_socktype = SOCK_STREAM;
+            hints.ai_flags = AI_PASSIVE;
+
+            std::string host_str{host};
+            std::string port_str = std::to_string(port);
+            const char* host_ptr = host.empty() ? nullptr : host_str.c_str();
+            addrinfo* raw = nullptr;
+            int rc = getaddrinfo(host_ptr, port_str.c_str(), &hints, &raw);
+
+            if(rc == EAI_SYSTEM){
+                return std::unexpected(std::error_code{errno, std::system_category()});
+            }
+
+            if (rc != 0) {
+                    return std::unexpected(std::error_code{rc, gai_category()});
+            }
+
+            return AddrInfoList{raw, &freeaddrinfo};
+
+        }
+
+
+    }
 
     Socket::Socket(FileDescriptor fd) noexcept : fd_{std::move(fd)} {}
 
@@ -44,41 +87,39 @@ namespace proxy {
 
     }
 
-    std::expected<Socket, std::error_code> Socket::listen(std::string_view host, std::uint16_t port){
-
-        FileDescriptor fd{::socket(AF_INET, SOCK_STREAM, 0)};
-        if(!fd.valid()){
-            return std::unexpected(std::error_code{errno, std::system_category()});
-        }
-        std::println("got file descriptor {}", fd.get());
-
-        int yes = 1;
-        if (::setsockopt(fd.get(), SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1){
-            return std::unexpected(std::error_code{errno,std::system_category()});
+    std::expected<Socket, std::error_code> Socket::listen(std::string_view host, std::uint16_t port) {
+        auto addresses = resolve(host, port);
+        if (!addresses) {
+            return std::unexpected(addresses.error());
         }
 
-        sockaddr_in addr{};
-        std::string host_str{host};
-        addr.sin_family = AF_INET;
-        addr.sin_port = ::htons(port);
-        if(::inet_pton(AF_INET, host_str.c_str(), &addr.sin_addr) != 1){
-            return std::unexpected(std::make_error_code(std::errc::invalid_argument));
+        std::error_code last_error = std::make_error_code(std::errc::address_not_available);
+
+        for (addrinfo* ai = addresses->get(); ai != nullptr; ai = ai->ai_next) {
+            FileDescriptor fd{::socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol)};
+            if (!fd.valid()) {
+                last_error = std::error_code{errno, std::system_category()};
+                continue;
+            }
+
+            int yes = 1;
+            if (::setsockopt(fd.get(), SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1) {
+                last_error = std::error_code{errno, std::system_category()};
+                continue;
+            }
+            if (::bind(fd.get(), ai->ai_addr, ai->ai_addrlen) == -1) {
+                last_error = std::error_code{errno, std::system_category()};
+                continue;
+            }
+            if (::listen(fd.get(), SOMAXCONN) == -1) {
+                last_error = std::error_code{errno, std::system_category()};
+                continue;
+            }
+
+            return Socket{std::move(fd)};
         }
 
-
-        if(::bind(fd.get(), reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == -1){
-            return std::unexpected(std::error_code{errno, std::system_category()});
-        }
-
-        if(::listen(fd.get(), SOMAXCONN) == -1){
-            return std::unexpected(std::error_code{errno, std::system_category()});
-        }
-
-        return Socket{std::move(fd)};
+        return std::unexpected(last_error);
     }
-
-
-
-
 
 }
