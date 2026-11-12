@@ -23,5 +23,9 @@ add_library(proxy_core src/file_descriptor.cpp
 
 target_include_directories(proxy_core PUBLIC include)
 
-add_executable(echo_server src/echo_server.cpp)
+add_executable(echo_server examples/echo_server.cpp)
 target_link_libraries(echo_server PRIVATE proxy_core)
+
+find_package(Threads REQUIRED)
+add_executable(proxy apps/proxy.cpp)
+target_link_libraries(proxy PRIVATE proxy_core Threads::Threads)

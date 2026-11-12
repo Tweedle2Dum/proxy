@@ -94,6 +94,17 @@ std::expected<std::size_t, std::error_code> Socket::send(std::span<const std::by
     return static_cast<std::size_t>(sent);
 }
 
+std::expected<void, std::error_code> Socket::send_all(std::span<const std::byte> data) const {
+    while (!data.empty()) {
+        auto sent = send(data);
+        if (!sent) {
+            return std::unexpected(sent.error());
+        }
+        data = data.subspan(*sent);
+    }
+    return {};
+}
+
 std::expected<Socket, std::error_code> Socket::listen(std::string_view host, std::uint16_t port) {
     auto addresses = resolve(host, port, ResolveFor::Listen);
     if (!addresses) {
@@ -129,8 +140,7 @@ std::expected<Socket, std::error_code> Socket::listen(std::string_view host, std
     return std::unexpected(last_error);
 }
 
-std::expected<Socket, std::error_code> Socket::connect(std::string_view host,
-                                                       std::uint16_t port) {
+std::expected<Socket, std::error_code> Socket::connect(std::string_view host, std::uint16_t port) {
     auto addresses = resolve(host, port, ResolveFor::Connect);
     if (!addresses) {
         return std::unexpected(addresses.error());
@@ -150,6 +160,14 @@ std::expected<Socket, std::error_code> Socket::connect(std::string_view host,
         return Socket{std::move(fd)};
     }
     return std::unexpected(last_error);
+}
+
+std::expected<void, std::error_code> Socket::shutdown_write() const {
+    if (::shutdown(fd(), SHUT_WR) == -1) {
+        return std::unexpected(std::error_code{errno, std::system_category()});
+    }
+
+    return {};
 }
 
 }  // namespace proxy

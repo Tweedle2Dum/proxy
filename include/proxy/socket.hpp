@@ -20,6 +20,9 @@ class Socket {
     [[nodiscard]] std::expected<Socket, std::error_code> accept() const;
     [[nodiscard]] std::expected<std::size_t, std::error_code> send(
         std::span<const std::byte> buffer) const;
+    [[nodiscard]] std::expected<void, std::error_code> send_all(
+        std::span<const std::byte> buffer) const;
+    [[nodiscard]] std::expected<void, std::error_code> shutdown_write() const;
     [[nodiscard]] std::expected<std::size_t, std::error_code> recv(
         std::span<std::byte> buffer) const;
 
