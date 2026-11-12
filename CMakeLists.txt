@@ -18,22 +18,10 @@ add_compile_options(-Wall -Wextra -Wpedantic -Werror)
 
 add_library(proxy_core src/file_descriptor.cpp
                        src/socket.cpp
+                       src/forward.cpp
 )
 
 target_include_directories(proxy_core PUBLIC include)
 
 add_executable(echo_server src/echo_server.cpp)
 target_link_libraries(echo_server PRIVATE proxy_core)
-
-
-# general utils
-find_program(CLANG_FORMAT clang-format)
-if(CLANG_FORMAT)
-  file(GLOB_RECURSE PROXY_FORMAT_FILES CONFIGURE_DEPENDS
-    ${CMAKE_SOURCE_DIR}/src/*.cpp
-    ${CMAKE_SOURCE_DIR}/include/*.hpp
-  )
-  add_custom_target(format
-    COMMAND ${CLANG_FORMAT} -i ${PROXY_FORMAT_FILES}
-  )
-endif()
