@@ -1,19 +1,14 @@
-#include "proxy/socket.hpp"
-
-#include <arpa/inet.h>
 #include <netdb.h>
-#include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-
 #include <cerrno>
-#include <cstddef>
-#include <expected>
 #include <memory>
-#include <span>
-#include <system_error>
+#include <string>
+#include <utility>
 
 #include "proxy/file_descriptor.hpp"
+#include "proxy/socket.hpp"
+
 
 namespace proxy {
 
@@ -64,7 +59,11 @@ Socket::Socket(FileDescriptor fd) noexcept : fd_{std::move(fd)} {}
 int Socket::fd() const noexcept { return this->fd_.get(); }
 
 std::expected<Socket, std::error_code> Socket::accept() const {
-    FileDescriptor client_fd{::accept(fd(), nullptr, nullptr)};
+    int raw_fd ;
+    do{
+        raw_fd = ::accept(fd(), nullptr, nullptr);
+    }while(raw_fd == -1 && errno == EINTR);
+    FileDescriptor client_fd{raw_fd};
     if (!client_fd.valid()) {
         return std::unexpected(std::error_code{errno, std::system_category()});
     }
@@ -76,7 +75,12 @@ std::expected<std::size_t, std::error_code> Socket::recv(std::span<std::byte> bu
     if (buffer.empty()) {
         return std::unexpected(std::make_error_code(std::errc::invalid_argument));
     }
-    ssize_t received = ::recv(fd(), buffer.data(), buffer.size(), 0);
+    ssize_t received;
+    do {
+        received = ::recv(fd(), buffer.data(), buffer.size(), 0);
+
+    } while (received == -1 && errno == EINTR);
+
     if (received == -1) {
         return std::unexpected(std::error_code{errno, std::system_category()});
     }
@@ -87,7 +91,11 @@ std::expected<std::size_t, std::error_code> Socket::send(std::span<const std::by
     if (buffer.empty()) {
         return std::unexpected(std::make_error_code(std::errc::invalid_argument));
     }
-    ssize_t sent = ::send(fd(), buffer.data(), buffer.size(), 0);
+    ssize_t sent;
+    do{
+        sent = ::send(fd(), buffer.data(), buffer.size(), MSG_NOSIGNAL);
+    }while( sent == -1 && errno == EINTR);
+
     if (sent == -1) {
         return std::unexpected(std::error_code{errno, std::system_category()});
     }
